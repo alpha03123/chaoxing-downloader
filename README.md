@@ -6,10 +6,21 @@
 
 ## 安装
 
+### 方式一：克隆仓库后本地安装
+
 ```powershell
+git clone https://github.com/alpha03123/chaoxing-downloader.git
+cd chaoxing-downloader
 python -m venv .venv
 .\.venv\Scripts\python -m pip install -e .
 .\.venv\Scripts\python -m playwright install chromium
+```
+
+### 方式二：直接从 GitHub 安装
+
+```powershell
+python -m pip install "git+https://github.com/alpha03123/chaoxing-downloader.git"
+python -m playwright install chromium
 ```
 
 ## 登录
@@ -67,6 +78,40 @@ chaoxing-downloader clear-cache
 ```
 
 所有命令支持 `--config <path>` 指定配置文件。
+
+## 作为 Python 库使用
+
+当前版本已暴露稳定的公开 API：
+
+```python
+from chaoxing_downloader import ChaoxingDownloader
+
+downloader = ChaoxingDownloader.from_config("config.toml")
+
+courses = downloader.list_courses()
+chapters = downloader.list_chapters(courses[0].course_key)
+videos = downloader.list_videos(chapters[0].chapter_key)
+path = downloader.download_video(videos[0].video_key)
+```
+
+也可以使用便捷函数：
+
+```python
+from chaoxing_downloader import load_downloader
+
+downloader = load_downloader("config.toml")
+courses = downloader.list_courses()
+```
+
+建议外部调用方只依赖：
+
+```python
+ChaoxingDownloader
+load_downloader
+CourseRecord / ChapterRecord / VideoRecord
+```
+
+不要直接依赖内部模块实现细节。
 
 ## 缓存
 
