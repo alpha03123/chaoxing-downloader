@@ -1,6 +1,6 @@
 # chaoxing-downloader
 
-学习通课程视频下载工具，支持浏览器登录、课程/章节/视频三级浏览、缓存和批量下载。
+学习通课程视频下载工具，支持浏览器登录、课程/章节/视频三级浏览
 
 依赖：Python 3.11+、httpx、beautifulsoup4、playwright（Chromium）
 
