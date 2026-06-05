@@ -1,0 +1,36 @@
+# Python cache/build artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local Chaoxing state
+.chaoxing-browser/
+.chaoxing-cache.json
+config.toml
+downloads/
+
+# Temporary/debug files
+temp/
+tmp/
+tmp_*
+*.tmp
+*.log
+
+# Editor/OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
