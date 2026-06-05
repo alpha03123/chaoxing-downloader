@@ -100,7 +100,16 @@ downloader = ChaoxingDownloader.load(state_dir=".chaoxing")
 3. 构造可用的 `ChaoxingDownloader` 实例。
 4. 不会再弹浏览器。
 
+## `is_initialized()`
 
+```python
+if ChaoxingDownloader.is_initialized(state_dir=".chaoxing"):
+    downloader = ChaoxingDownloader.load(state_dir=".chaoxing")
+else:
+    downloader = ChaoxingDownloader.init(state_dir=".chaoxing")
+```
+
+用于判断指定 `state_dir` 是否已经存在本地登录状态。这个方法只检查本地 `session.json` 是否存在，不联网验证 Cookie 是否仍然有效。
 
 ## 查询课程
 
@@ -176,4 +185,16 @@ path = downloader.download_video(video_key)
 
 ```python
 path = downloader.download_video(video_key, output_dir="my-downloads")
+```
+
+可以用 `progress` 获取下载进度：
+
+```python
+def on_progress(downloaded: int, total: int | None) -> None:
+    if total:
+        print(f"{downloaded / total:.1%}")
+    else:
+        print(f"{downloaded} bytes")
+
+path = downloader.download_video(video_key, progress=on_progress)
 ```

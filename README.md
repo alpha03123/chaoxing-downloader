@@ -7,7 +7,19 @@
 Python 库使用，见 [Python API 文档](docs/api/README.md)。
 ## 安装
 
+### 方式一：直接从 GitHub 安装
+
 ```powershell
+python -m venv .venv
+.\.venv\Scripts\python -m pip install "git+https://github.com/alpha03123/chaoxing-downloader.git"
+.\.venv\Scripts\python -m playwright install chromium
+```
+
+### 方式二：克隆仓库后本地开发安装
+
+```powershell
+git clone https://github.com/alpha03123/chaoxing-downloader.git
+cd chaoxing-downloader
 python -m venv .venv
 .\.venv\Scripts\python -m pip install -e .
 .\.venv\Scripts\python -m playwright install chromium
@@ -86,7 +98,7 @@ chaoxing-downloader clear-cache
 **Playwright 未安装**
 
 ```powershell
-.\.venv\Scripts\python -m pip install -e .
+.\.venv\Scripts\python -m pip install playwright
 .\.venv\Scripts\python -m playwright install chromium
 ```
 

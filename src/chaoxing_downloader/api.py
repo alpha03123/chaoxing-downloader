@@ -8,7 +8,7 @@ from .http_client import ChaoxingClient
 from .models import AppConfig, ChapterRecord, CourseRecord, VideoRecord
 from .session import SessionConfig
 from .state import StatePaths, load_config_from_state, make_config_from_state, save_state
-from .workflow import download_video, list_chapters, list_courses, list_videos
+from .workflow import DownloadProgress, download_video, list_chapters, list_courses, list_videos
 
 
 class ChaoxingDownloader:
@@ -56,6 +56,10 @@ class ChaoxingDownloader:
     def load(cls, *, state_dir: str = ".chaoxing") -> "ChaoxingDownloader":
         return cls(load_config_from_state(StatePaths.from_dir(state_dir)))
 
+    @classmethod
+    def is_initialized(cls, *, state_dir: str = ".chaoxing") -> bool:
+        return StatePaths.from_dir(state_dir).session.exists()
+
     def list_courses(self, *, url: str = "") -> list[CourseRecord]:
         return self._list_courses(self.client, self.config, url_override=url)
 
@@ -65,5 +69,11 @@ class ChaoxingDownloader:
     def list_videos(self, chapter_key: str) -> list[VideoRecord]:
         return self._list_videos(self.client, self.config, chapter_key=chapter_key)
 
-    def download_video(self, video_key: str, *, output_dir: str | Path | None = None) -> Path:
-        return self._download_video(self.client, self.config, video_key=video_key, output_dir=output_dir)
+    def download_video(
+        self,
+        video_key: str,
+        *,
+        output_dir: str | Path | None = None,
+        progress: DownloadProgress | None = None,
+    ) -> Path:
+        return self._download_video(self.client, self.config, video_key=video_key, output_dir=output_dir, progress=progress)

@@ -81,6 +81,37 @@ ChaoxingDownloader(...)
 
 如果 `session.json` 不存在，会抛出错误并提示先调用 `ChaoxingDownloader.init()`。
 
+## `ChaoxingDownloader.is_initialized()`
+
+```python
+ready = ChaoxingDownloader.is_initialized(state_dir=".chaoxing")
+```
+
+判断指定 `state_dir` 是否已经存在本地登录状态。
+
+参数：
+
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `state_dir` | `str` | `".chaoxing"` | 与 `init()` / `load()` 相同的状态目录 |
+
+返回：
+
+| 类型 | 说明 |
+| --- | --- |
+| `bool` | 如果 `state_dir/session.json` 存在则为 `True`，否则为 `False` |
+
+示例：
+
+```python
+if ChaoxingDownloader.is_initialized(state_dir=".chaoxing"):
+    downloader = ChaoxingDownloader.load(state_dir=".chaoxing")
+else:
+    downloader = ChaoxingDownloader.init(state_dir=".chaoxing")
+```
+
+这个方法只检查本地状态文件是否存在，不联网验证 Cookie 是否仍然有效。如果状态文件损坏或 Cookie 过期，后续 `load()` 或请求课程时仍会抛出错误。
+
 ## `list_courses()`
 
 ```python
@@ -271,12 +302,27 @@ path = downloader.download_video(video_key)
 path = downloader.download_video(video_key, output_dir="my-downloads")
 ```
 
+也可以传入进度回调：
+
+```python
+def on_progress(downloaded: int, total: int | None) -> None:
+    if total:
+        print(f"{downloaded / total:.1%}")
+    else:
+        print(f"{downloaded} bytes")
+
+path = downloader.download_video(video_key, progress=on_progress)
+```
+
 参数：
 
 | 参数 | 类型 | 说明 |
 | --- | --- | --- |
 | `video_key` | `str` | 来自 `VideoRecord.video_key` |
 | `output_dir` | `str \| pathlib.Path \| None` | 可选；覆盖本次下载目录，不传则使用 `state_dir/downloads/` |
+| `progress` | `Callable[[int, int \| None], None] \| None` | 可选；每写入一个下载分块后回调，参数为已下载字节数和总字节数 |
+
+如果服务器没有返回 `Content-Length`，`progress` 的第二个参数 `total` 为 `None`。
 
 返回：
 

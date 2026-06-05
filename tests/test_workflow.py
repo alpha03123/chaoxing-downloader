@@ -309,6 +309,7 @@ def test_list_videos_loads_knowledge_cards_when_studentstudy_is_shell(tmp_path) 
 def test_download_video_writes_to_explicit_output_dir(tmp_path) -> None:
     cache_path = tmp_path / "cache.json"
     output_dir = tmp_path / "custom-downloads"
+    progress_calls: list[tuple[int, int | None]] = []
     save_cache(
         str(cache_path),
         CacheState(
@@ -343,7 +344,14 @@ def test_download_video_writes_to_explicit_output_dir(tmp_path) -> None:
         cache_path=str(cache_path),
     )
 
-    path = download_video(client, config, video_key="video-demo", output_dir=output_dir)
+    path = download_video(
+        client,
+        config,
+        video_key="video-demo",
+        output_dir=output_dir,
+        progress=lambda downloaded, total: progress_calls.append((downloaded, total)),
+    )
 
     assert path == output_dir / "1.1.mp4"
     assert path.read_bytes() == b"video-bytes"
+    assert progress_calls == [(11, 11)]

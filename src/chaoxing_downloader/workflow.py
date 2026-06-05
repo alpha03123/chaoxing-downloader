@@ -4,6 +4,7 @@ from http.cookies import SimpleCookie
 from pathlib import Path
 import re
 import time
+from typing import Callable
 from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 
 from bs4 import BeautifulSoup
@@ -29,6 +30,9 @@ from .models import ChapterRecord, CourseRecord, VideoRecord
 
 class WorkflowError(ValueError):
     pass
+
+
+DownloadProgress = Callable[[int, int | None], None]
 
 
 def list_courses(client: ChaoxingClient, config: AppConfig, *, url_override: str = "") -> list[CourseRecord]:
@@ -102,7 +106,14 @@ def list_videos(client: ChaoxingClient, config: AppConfig, *, chapter_key: str) 
     return records
 
 
-def download_video(client: ChaoxingClient, config: AppConfig, *, video_key: str, output_dir: str | Path | None = None) -> Path:
+def download_video(
+    client: ChaoxingClient,
+    config: AppConfig,
+    *,
+    video_key: str,
+    output_dir: str | Path | None = None,
+    progress: DownloadProgress | None = None,
+) -> Path:
     state = load_cache(config.cache_path)
     video = next((item for item in state.videos if item.video_key == video_key), None)
     if video is None:
@@ -118,7 +129,13 @@ def download_video(client: ChaoxingClient, config: AppConfig, *, video_key: str,
     target_dir = Path(output_dir) if output_dir is not None else Path(config.output_dir)
     target_dir.mkdir(parents=True, exist_ok=True)
     target = target_dir / filename
-    target.write_bytes(client.get_bytes(media_url))
+    downloaded = 0
+    with target.open("wb") as file:
+        for chunk, total in client.iter_bytes(media_url):
+            file.write(chunk)
+            downloaded += len(chunk)
+            if progress is not None:
+                progress(downloaded, total)
     return target
 
 

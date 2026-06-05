@@ -97,7 +97,9 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"[{item.video_key}] {item.title}")
             return 0
         if args.command == "download-video":
-            path = download_video(client, config, video_key=args.video)
+            progress = _DownloadProgress()
+            path = download_video(client, config, video_key=args.video, progress=progress)
+            progress.finish()
             print(path)
             return 0
     except (ConfigError, InitError, WorkflowError, ValueError) as exc:
@@ -201,3 +203,31 @@ class _InitProgress:
             "config": "[config]",
         }.get(kind, "[init]")
         print(f"{prefix} {message}", flush=True)
+
+
+class _DownloadProgress:
+    def __init__(self) -> None:
+        self._last_inline = False
+
+    def __call__(self, downloaded: int, total: int | None) -> None:
+        if total:
+            percent = downloaded / total * 100
+            message = f"[download] {percent:6.2f}% {_format_size(downloaded)} / {_format_size(total)}"
+        else:
+            message = f"[download] {_format_size(downloaded)}"
+        print(f"\r{message}", end="", flush=True)
+        self._last_inline = True
+
+    def finish(self) -> None:
+        if self._last_inline:
+            print()
+            self._last_inline = False
+
+
+def _format_size(size: int) -> str:
+    value = float(size)
+    for unit in ("B", "KB", "MB", "GB"):
+        if value < 1024 or unit == "GB":
+            return f"{value:.1f}{unit}"
+        value /= 1024
+    return f"{value:.1f}GB"

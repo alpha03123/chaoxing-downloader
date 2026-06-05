@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import httpx
 
 from .session import SessionConfig, build_headers
@@ -39,3 +41,20 @@ class ChaoxingClient:
         response = self._client.get(url)
         response.raise_for_status()
         return response.content
+
+    def iter_bytes(self, url: str, *, chunk_size: int = 1024 * 1024) -> Iterator[tuple[bytes, int | None]]:
+        with self._client.stream("GET", url) as response:
+            response.raise_for_status()
+            total = _content_length(response.headers.get("Content-Length"))
+            for chunk in response.iter_bytes(chunk_size=chunk_size):
+                if chunk:
+                    yield chunk, total
+
+
+def _content_length(value: str | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None

@@ -89,11 +89,26 @@ def test_downloader_load_reads_state_dir(tmp_path: Path) -> None:
     assert downloader.config.cache_path == str(state_dir / "cache.json")
 
 
-def test_downloader_download_video_passes_output_dir() -> None:
-    calls: list[tuple[str, str | Path | None]] = []
+def test_downloader_is_initialized_checks_state_session(tmp_path: Path) -> None:
+    state_dir = tmp_path / ".chaoxing"
 
-    def download_video_impl(client, config, *, video_key: str, output_dir=None) -> Path:
-        calls.append((video_key, output_dir))
+    assert not ChaoxingDownloader.is_initialized(state_dir=str(state_dir))
+
+    state_dir.mkdir()
+    (state_dir / "session.json").write_text("{}", encoding="utf-8")
+
+    assert ChaoxingDownloader.is_initialized(state_dir=str(state_dir))
+
+
+def test_downloader_download_video_passes_output_dir() -> None:
+    progress_calls: list[tuple[int, int | None]] = []
+    calls: list[tuple[str, str | Path | None, object]] = []
+
+    def progress(downloaded: int, total: int | None) -> None:
+        progress_calls.append((downloaded, total))
+
+    def download_video_impl(client, config, *, video_key: str, output_dir=None, progress=None) -> Path:
+        calls.append((video_key, output_dir, progress))
         return Path("custom/video.mp4")
 
     downloader = ChaoxingDownloader(
@@ -102,7 +117,8 @@ def test_downloader_download_video_passes_output_dir() -> None:
         download_video_impl=download_video_impl,
     )
 
-    path = downloader.download_video("video-demo", output_dir="my-downloads")
+    path = downloader.download_video("video-demo", output_dir="my-downloads", progress=progress)
 
     assert path == Path("custom/video.mp4")
-    assert calls == [("video-demo", "my-downloads")]
+    assert calls == [("video-demo", "my-downloads", progress)]
+    assert progress_calls == []
