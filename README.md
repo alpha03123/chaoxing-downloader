@@ -83,6 +83,13 @@ chaoxing-downloader clear-cache
 
 所有命令支持 `--config <path>` 指定配置文件。
 
+## Python 示例
+
+仓库内提供了一个最小示例脚本，会自动判断是否已初始化、列出第一个课程/章节/视频并下载：
+
+```powershell
+python examples/download_first_video.py
+```
 
 
 ## 缓存
