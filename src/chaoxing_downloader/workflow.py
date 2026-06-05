@@ -102,7 +102,7 @@ def list_videos(client: ChaoxingClient, config: AppConfig, *, chapter_key: str) 
     return records
 
 
-def download_video(client: ChaoxingClient, config: AppConfig, *, video_key: str) -> Path:
+def download_video(client: ChaoxingClient, config: AppConfig, *, video_key: str, output_dir: str | Path | None = None) -> Path:
     state = load_cache(config.cache_path)
     video = next((item for item in state.videos if item.video_key == video_key), None)
     if video is None:
@@ -115,9 +115,9 @@ def download_video(client: ChaoxingClient, config: AppConfig, *, video_key: str)
         if not media_url:
             raise WorkflowError(f"错误：视频状态接口返回异常（status={status_payload.get('status')}），object_id={video.object_id}")
         filename = str(status_payload.get("filename") or filename)
-    output_dir = Path(config.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    target = output_dir / filename
+    target_dir = Path(output_dir) if output_dir is not None else Path(config.output_dir)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / filename
     target.write_bytes(client.get_bytes(media_url))
     return target
 
@@ -205,7 +205,7 @@ def _build_course_stu_url_from_cookie(cookie: str, course: CourseRecord) -> str:
     }
     missing = [key for key in ("cpi", "enc", "t") if not values[key]]
     if missing:
-        raise WorkflowError(f"错误：课程入口需要课程级 Cookie：{', '.join(prefix + key for key in missing)}")
+        raise WorkflowError(f"错误：课程入口缺少参数：{', '.join(prefix + key for key in missing)}")
     return f"https://mooc2-ans.chaoxing.com/mooc2-ans/mycourse/stu?{urlencode(values)}"
 
 

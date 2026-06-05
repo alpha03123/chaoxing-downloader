@@ -17,6 +17,7 @@ venv/
 env/
 
 # Local Chaoxing state
+.chaoxing/
 .chaoxing-browser/
 .chaoxing-cache.json
 config.toml

@@ -195,8 +195,8 @@ class _InitProgress:
             "checking": "[auth]",
             "courses": "[courses]",
             "course": "[course]",
-            "course_cookie": "[cookie]",
-            "course_cookie_missing": "[cookie]",
+            "course_cookie": "[entry]",
+            "course_cookie_missing": "[entry]",
             "cookies": "[cookie]",
             "config": "[config]",
         }.get(kind, "[init]")

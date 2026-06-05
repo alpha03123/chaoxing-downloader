@@ -3,10 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable
 
-from .config import load_config
+from .auth_init import DEFAULT_LOGIN_URL, collect_cookie_header_with_browser
 from .http_client import ChaoxingClient
 from .models import AppConfig, ChapterRecord, CourseRecord, VideoRecord
 from .session import SessionConfig
+from .state import StatePaths, load_config_from_state, make_config_from_state, save_state
 from .workflow import download_video, list_chapters, list_courses, list_videos
 
 
@@ -31,8 +32,29 @@ class ChaoxingDownloader:
         self._download_video = download_video_impl
 
     @classmethod
-    def from_config(cls, path: str | None = None) -> "ChaoxingDownloader":
-        return cls(load_config(path))
+    def init(
+        cls,
+        *,
+        state_dir: str = ".chaoxing",
+        timeout_seconds: int = 300,
+        login_url: str = DEFAULT_LOGIN_URL,
+        collect_impl: Callable[..., tuple[str, list[CourseRecord]]] = collect_cookie_header_with_browser,
+    ) -> "ChaoxingDownloader":
+        paths = StatePaths.from_dir(state_dir)
+        paths.root.mkdir(parents=True, exist_ok=True)
+        cookie, warmed_courses = collect_impl(
+            user_data_dir=str(paths.browser),
+            login_url=login_url,
+            timeout_seconds=timeout_seconds,
+            progress=None,
+        )
+        config = make_config_from_state(cookie, paths)
+        save_state(paths, config, warmed_courses)
+        return cls(config)
+
+    @classmethod
+    def load(cls, *, state_dir: str = ".chaoxing") -> "ChaoxingDownloader":
+        return cls(load_config_from_state(StatePaths.from_dir(state_dir)))
 
     def list_courses(self, *, url: str = "") -> list[CourseRecord]:
         return self._list_courses(self.client, self.config, url_override=url)
@@ -43,9 +65,5 @@ class ChaoxingDownloader:
     def list_videos(self, chapter_key: str) -> list[VideoRecord]:
         return self._list_videos(self.client, self.config, chapter_key=chapter_key)
 
-    def download_video(self, video_key: str) -> Path:
-        return self._download_video(self.client, self.config, video_key=video_key)
-
-
-def load_downloader(path: str | None = None) -> ChaoxingDownloader:
-    return ChaoxingDownloader.from_config(path)
+    def download_video(self, video_key: str, *, output_dir: str | Path | None = None) -> Path:
+        return self._download_video(self.client, self.config, video_key=video_key, output_dir=output_dir)

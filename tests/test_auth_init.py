@@ -106,7 +106,7 @@ def test_warm_course_cookies_reports_course_cookie_status() -> None:
 
     warm_course_cookies(page, progress=lambda kind, message: events.append((kind, message)))
 
-    assert ("course_cookie", "已采集课程 Cookie：大学生职业发展与就业指导") in events
+    assert ("course_cookie", "已采集课程入口参数：大学生职业发展与就业指导") in events
 
 
 class FakePage:

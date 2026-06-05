@@ -1,10 +1,12 @@
+from pathlib import Path
+
 import httpx
 
 from chaoxing_downloader.cache_store import save_cache
 from chaoxing_downloader.http_client import ChaoxingClient
-from chaoxing_downloader.models import AppConfig, CacheState, ChapterRecord, CourseRecord
+from chaoxing_downloader.models import AppConfig, CacheState, ChapterRecord, CourseRecord, VideoRecord
 from chaoxing_downloader.session import SessionConfig
-from chaoxing_downloader.workflow import list_chapters, list_courses, list_videos
+from chaoxing_downloader.workflow import download_video, list_chapters, list_courses, list_videos
 
 
 def test_list_chapters_resolves_studentcourse_from_course_shell(tmp_path) -> None:
@@ -302,3 +304,46 @@ def test_list_videos_loads_knowledge_cards_when_studentstudy_is_shell(tmp_path) 
     assert [item.object_id for item in records] == ["object-1"]
     assert records[0].media_url == "https://cdn.example.test/1.mp4"
     assert "/mooc-ans/knowledge/cards" in requested_paths
+
+
+def test_download_video_writes_to_explicit_output_dir(tmp_path) -> None:
+    cache_path = tmp_path / "cache.json"
+    output_dir = tmp_path / "custom-downloads"
+    save_cache(
+        str(cache_path),
+        CacheState(
+            videos=[
+                VideoRecord(
+                    video_key="video-demo",
+                    chapter_key="chapter-demo",
+                    title="demo",
+                    object_id="object-1",
+                    job_id="job-1",
+                    mid="mid-1",
+                    media_url="https://cdn.example.test/1.mp4",
+                    filename="1.1.mp4",
+                )
+            ]
+        ),
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if str(request.url) == "https://cdn.example.test/1.mp4":
+            return httpx.Response(200, content=b"video-bytes")
+        return httpx.Response(404)
+
+    client = ChaoxingClient(
+        SessionConfig(cookie="UID=1"),
+        transport=httpx.MockTransport(handler),
+    )
+    config = AppConfig(
+        cookie="UID=1",
+        referer="",
+        output_dir=str(tmp_path / "default-downloads"),
+        cache_path=str(cache_path),
+    )
+
+    path = download_video(client, config, video_key="video-demo", output_dir=output_dir)
+
+    assert path == output_dir / "1.1.mp4"
+    assert path.read_bytes() == b"video-bytes"

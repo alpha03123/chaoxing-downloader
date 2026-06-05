@@ -159,8 +159,8 @@ def warm_course_cookies(page, *, progress: ProgressCallback | None = None) -> li
     )
     records = parse_course_list(response.text())
     if not records:
-        raise InitError("错误：登录成功，但未解析到课程列表，无法预热课程 Cookie")
-    _emit(progress, "courses", f"解析到 {len(records)} 门课程，开始采集课程 Cookie")
+        raise InitError("错误：登录成功，但未解析到课程列表，无法预热课程入口参数")
+    _emit(progress, "courses", f"解析到 {len(records)} 门课程，开始采集课程入口参数")
     warmed_records: list[CourseRecord] = []
     for index, record in enumerate(records, start=1):
         _emit(progress, "course", f"[{index}/{len(records)}] 进入课程：{record.title}")
@@ -169,7 +169,7 @@ def warm_course_cookies(page, *, progress: ProgressCallback | None = None) -> li
         course_study_url = page.url if _is_course_study_url(page.url) else ""
         warmed_records.append(_with_course_study_url(record, course_study_url))
         if _has_course_cookie(page.context.cookies(), record.course_id):
-            _emit(progress, "course_cookie", f"已采集课程 Cookie：{record.title}")
+            _emit(progress, "course_cookie", f"已采集课程入口参数：{record.title}")
         elif course_study_url:
             _emit(progress, "course_cookie", f"已采集课程入口参数：{record.title}")
         else:
