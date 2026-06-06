@@ -4,7 +4,7 @@
 
 依赖：Python 3.11+、httpx、beautifulsoup4、playwright（Chromium）
 
-Python 库使用，见 [Python API 文档](docs/api/README.md)。
+Python 库使用，见 [Python API 文档](docs/api/reference.md)。
 ## 安装
 
 ```powershell

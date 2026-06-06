@@ -22,7 +22,7 @@ from .cache_store import (
 )
 from .config import AppConfig
 from .course_catalog_parser import build_video_records, parse_course_list, parse_student_course
-from .course_parser import parse_course_page
+from .course_parser import UnsupportedChapterError, parse_course_page
 from .http_client import ChaoxingClient
 from .media_resolver import resolve_media_status
 from .models import ChapterRecord, CourseRecord, VideoRecord
@@ -82,9 +82,12 @@ def list_videos(client: ChaoxingClient, config: AppConfig, *, chapter_key: str) 
     html, page_url = client.get_text_with_url(chapter.studentstudy_url)
     try:
         course = parse_course_page(html)
-    except ValueError:
+    except UnsupportedChapterError:
         cards_url = _build_knowledge_cards_url(html, page_url)
-        course = parse_course_page(client.get_text(cards_url))
+        try:
+            course = parse_course_page(client.get_text(cards_url))
+        except UnsupportedChapterError as exc:
+            raise UnsupportedChapterError(f"当前章节没有可解析的视频任务点：{chapter.title}（{chapter.order}）。{exc}") from exc
     first_video_status = None
     task_payloads: list[dict[str, object]] = []
     for chapter_item in course.chapters:

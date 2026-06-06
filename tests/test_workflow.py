@@ -3,6 +3,7 @@ from pathlib import Path
 import httpx
 
 from chaoxing_downloader.cache_store import save_cache
+from chaoxing_downloader.course_parser import UnsupportedChapterError
 from chaoxing_downloader.http_client import ChaoxingClient
 from chaoxing_downloader.models import AppConfig, CacheState, ChapterRecord, CourseRecord, VideoRecord
 from chaoxing_downloader.session import SessionConfig
@@ -304,6 +305,63 @@ def test_list_videos_loads_knowledge_cards_when_studentstudy_is_shell(tmp_path) 
     assert [item.object_id for item in records] == ["object-1"]
     assert records[0].media_url == "https://cdn.example.test/1.mp4"
     assert "/mooc-ans/knowledge/cards" in requested_paths
+
+
+def test_list_videos_reports_unsupported_non_video_chapter(tmp_path) -> None:
+    cache_path = tmp_path / "cache.json"
+    save_cache(
+        str(cache_path),
+        CacheState(
+            chapters=[
+                ChapterRecord(
+                    chapter_key="chapter-goal",
+                    chapter_id="705061306",
+                    course_key="course-demo",
+                    title="职业世界地图",
+                    order="12.1",
+                    studentstudy_url="https://mooc1.chaoxing.com/mycourse/studentstudy?chapterId=705061306&courseId=261641822&clazzid=142332957&cpi=407073562",
+                )
+            ]
+        ),
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/mycourse/studentstudy"):
+            return httpx.Response(200, text="""
+                <input type="hidden" id="curCourseId" value="261641822"/>
+                <input type="hidden" id="curChapterId" value="705061306"/>
+                <input type="hidden" id="curCpi" value="407073562"/>
+                <input type="hidden" id="curClazzId" value="142332957"/>
+                <input type="hidden" id="isMicroCourse" value="false"/>
+            """)
+        if request.url.path.endswith("/knowledge/cards"):
+            return httpx.Response(200, text="""
+                <html>
+                  <head><title>学习目标</title></head>
+                  <body>
+                    <script>mArg = {"attachments":[],"knowledgename":"职业世界地图"};</script>
+                    <p>通过本章学习，你需要掌握和了解以下问题</p>
+                  </body>
+                </html>
+            """)
+        return httpx.Response(404)
+
+    client = ChaoxingClient(
+        SessionConfig(cookie="UID=1"),
+        transport=httpx.MockTransport(handler),
+    )
+    config = AppConfig(cookie="UID=1", referer="", cache_path=str(cache_path))
+
+    try:
+        list_videos(client, config, chapter_key="chapter-goal")
+    except UnsupportedChapterError as exc:
+        message = str(exc)
+        assert "没有可解析的视频任务点" in message
+        assert "职业世界地图" in message
+        assert "学习目标" in message
+        return
+
+    raise AssertionError("expected UnsupportedChapterError")
 
 
 def test_download_video_writes_to_explicit_output_dir(tmp_path) -> None:

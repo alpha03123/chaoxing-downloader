@@ -8,6 +8,10 @@ from bs4 import BeautifulSoup
 from .models import Chapter, CoursePage, TaskPoint
 
 
+class UnsupportedChapterError(ValueError):
+    pass
+
+
 def parse_course_page(html: str) -> CoursePage:
     soup = BeautifulSoup(html, "html.parser")
     embedded_payload = _extract_marg_payload(html)
@@ -18,7 +22,7 @@ def parse_course_page(html: str) -> CoursePage:
             return CoursePage(title=title, chapters=chapters)
     chapters = _extract_chapters(soup)
     if not chapters:
-        raise ValueError("未解析到课程章节，学习通页面结构可能已变化")
+        raise UnsupportedChapterError(_unsupported_chapter_message(html, soup))
     return CoursePage(title=title, chapters=chapters)
 
 
@@ -107,3 +111,13 @@ def _extract_chapters(soup: BeautifulSoup) -> list[Chapter]:
 
 def _as_text(value: object) -> str:
     return value.strip() if isinstance(value, str) else ""
+
+
+def _unsupported_chapter_message(html: str, soup: BeautifulSoup) -> str:
+    title = soup.select_one("title")
+    title_text = title.get_text("", strip=True) if title else ""
+    if "用户登录" in html or "passport2.chaoxing.com/login" in html:
+        return "当前章节返回登录页，请重新初始化登录状态"
+    if title_text:
+        return f"当前章节暂不支持解析视频任务点（页面标题：{title_text}）"
+    return "当前章节暂不支持解析视频任务点"

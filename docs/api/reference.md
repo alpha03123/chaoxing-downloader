@@ -6,6 +6,7 @@
 from chaoxing_downloader import (
     ChaoxingDownloader,
     InitCancelled,
+    UnsupportedChapterError,
     CourseRecord,
     ChapterRecord,
     VideoRecord,
@@ -281,6 +282,31 @@ videos = downloader.list_videos(chapter_key)
 | --- | --- |
 | `list[VideoRecord]` | 视频记录列表 |
 
+异常：
+
+| 异常 | 说明 |
+| --- | --- |
+| `UnsupportedChapterError` | 当前章节不是可解析的视频任务点页|
+
+跳过非视频章节示例：
+
+```python
+from chaoxing_downloader import ChaoxingDownloader, UnsupportedChapterError
+
+downloader = ChaoxingDownloader.load(state_dir=".chaoxing", request_delay=1.0)
+chapters = downloader.list_chapters(course_key)
+
+for chapter in chapters:
+    try:
+        videos = downloader.list_videos(chapter.chapter_key)
+    except UnsupportedChapterError as exc:
+        print(f"skip unsupported chapter: {exc}")
+        continue
+
+    for video in videos:
+        print(video.video_key, video.title)
+```
+
 返回示例：
 
 ```python
@@ -316,6 +342,10 @@ videos = downloader.list_videos(chapter_key)
 | `media_url` | `str` | 媒体播放地址 |
 | `download_url` | `str` | 直接下载地址 |
 | `filename` | `str` | 原始文件名 |
+
+
+
+
 
 ## `download_video()`
 
