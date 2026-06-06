@@ -33,6 +33,18 @@ videos = downloader.list_videos(chapters[0].chapter_key)
 path = downloader.download_video(videos[0].video_key)
 ```
 
+如果触发平台限流，可以给普通 HTTP 请求加间隔：
+
+```python
+downloader = ChaoxingDownloader.load(request_delay=1.5)
+```
+
+首次初始化时还可以给课程预热cookie获取加间隔：
+
+```python
+downloader = ChaoxingDownloader.init(request_delay=1.5, course_delay=2.0)
+```
+
 如果在 GUI 或后台任务里需要取消登录初始化，可以传入 `cancel_check`：
 
 ```python
@@ -84,6 +96,8 @@ downloader = ChaoxingDownloader.load(state_dir="runtime/chaoxing")
 downloader = ChaoxingDownloader.init(
     state_dir=".chaoxing",
     timeout_seconds=300,
+    request_delay=1.5,
+    course_delay=2.0,
     cancel_check=lambda: False,
 )
 ```
@@ -99,10 +113,11 @@ downloader = ChaoxingDownloader.init(
 7. 返回可直接使用的 `ChaoxingDownloader` 实例。
 
 API 当前是阻塞的。`cancel_check` 会在等待登录和课程入口预热过程中被反复调用；返回 `True` 时抛出 `InitCancelled`。
+`request_delay` 控制后续普通 HTTP 请求前的等待秒数，`course_delay` 控制初始化预热课程入口时每门课进入前的等待秒数。
 ## `load()`
 
 ```python
-downloader = ChaoxingDownloader.load(state_dir=".chaoxing")
+downloader = ChaoxingDownloader.load(state_dir=".chaoxing", request_delay=1.5)
 ```
 
 行为：
@@ -111,14 +126,15 @@ downloader = ChaoxingDownloader.load(state_dir=".chaoxing")
 2. 使用 `.chaoxing/cache.json` 作为缓存。
 3. 构造可用的 `ChaoxingDownloader` 实例。
 4. 不会再弹浏览器。
+5. 如果传入 `request_delay`，每次 HTTP 请求前会等待指定秒数。
 
 ## `is_initialized()`
 
 ```python
-if ChaoxingDownloader.is_initialized(state_dir=".chaoxing"):
-    downloader = ChaoxingDownloader.load(state_dir=".chaoxing")
+if ChaoxingDownloader.is_initialized(state_dir=".chaoxing", request_delay=1.5):
+    downloader = ChaoxingDownloader.load(state_dir=".chaoxing", request_delay=1.5)
 else:
-    downloader = ChaoxingDownloader.init(state_dir=".chaoxing")
+    downloader = ChaoxingDownloader.init(state_dir=".chaoxing", request_delay=1.5, course_delay=2.0)
 ```
 
 用于判断指定 `state_dir` 是否已经存在可用登录状态。以及cookie是否可用。

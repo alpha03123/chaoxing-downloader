@@ -32,22 +32,27 @@ def build_parser() -> argparse.ArgumentParser:
     inspect_parser.add_argument("--cookie", required=True)
     inspect_parser.add_argument("--user-agent", required=False)
     inspect_parser.add_argument("--referer", required=False)
+    _add_delay_option(inspect_parser)
 
     list_courses_parser = subparsers.add_parser("list-courses", help="List courses from Chaoxing")
     list_courses_parser.add_argument("--url", required=False)
     list_courses_parser.add_argument("--config", required=False)
+    _add_delay_option(list_courses_parser)
 
     list_chapters_parser = subparsers.add_parser("list-chapters", help="List chapters for a cached course")
     list_chapters_parser.add_argument("--course", required=True)
     list_chapters_parser.add_argument("--config", required=False)
+    _add_delay_option(list_chapters_parser)
 
     list_videos_parser = subparsers.add_parser("list-videos", help="List videos for a cached chapter")
     list_videos_parser.add_argument("--chapter", required=True)
     list_videos_parser.add_argument("--config", required=False)
+    _add_delay_option(list_videos_parser)
 
     download_parser = subparsers.add_parser("download-video", help="Download a cached video")
     download_parser.add_argument("--video", required=True)
     download_parser.add_argument("--config", required=False)
+    _add_delay_option(download_parser)
 
     clear_cache_parser = subparsers.add_parser("clear-cache", help="Clear local cache")
     clear_cache_parser.add_argument("--config", required=False)
@@ -57,6 +62,7 @@ def build_parser() -> argparse.ArgumentParser:
     init_parser.add_argument("--user-data-dir", required=False, default=DEFAULT_USER_DATA_DIR)
     init_parser.add_argument("--login-url", required=False, default=DEFAULT_LOGIN_URL)
     init_parser.add_argument("--timeout", required=False, type=int, default=300)
+    init_parser.add_argument("--course-delay", required=False, type=float, default=0.0, help="Delay seconds before warming each course entry")
     return parser
 
 
@@ -73,6 +79,7 @@ def main(argv: list[str] | None = None) -> int:
                 login_url=args.login_url,
                 timeout_seconds=args.timeout,
                 progress=progress,
+                course_delay=args.course_delay,
             )
             return 0
         if args.command == "clear-cache":
@@ -80,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
             remove_cache(config)
             return 0
         config = load_config(getattr(args, "config", None))
-        client = ChaoxingClient(SessionConfig(cookie=config.cookie, referer=config.referer))
+        client = ChaoxingClient(SessionConfig(cookie=config.cookie, referer=config.referer), request_delay=getattr(args, "delay", 0.0))
         if args.command == "list-courses":
             records = list_courses(client, config, url_override=args.url or "")
             for item in records:
@@ -117,7 +124,7 @@ def _run_inspect_course(args: argparse.Namespace) -> int:
         user_agent=args.user_agent or "",
         referer=args.referer or "",
     )
-    client = ChaoxingClient(config)
+    client = ChaoxingClient(config, request_delay=args.delay)
     html = client.get_text(args.url)
     course = parse_course_page(html)
     media_url = ""
@@ -177,6 +184,10 @@ def _load_config_for_cache(path: str | None) -> AppConfig:
         return load_config(path)
     except ConfigError:
         return AppConfig(cookie="", referer="", cache_path=".chaoxing-cache.json")
+
+
+def _add_delay_option(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--delay", required=False, type=float, default=0.0, help="Delay seconds before each HTTP request")
 
 
 class _InitProgress:

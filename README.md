@@ -7,22 +7,8 @@
 Python 库使用，见 [Python API 文档](docs/api/README.md)。
 ## 安装
 
-### 方式一：直接从 GitHub 安装
-
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\python -m pip install "git+https://github.com/alpha03123/chaoxing-downloader.git"
-.\.venv\Scripts\python -m playwright install chromium
-```
-
-### 方式二：克隆仓库后本地开发安装
-
-```powershell
-git clone https://github.com/alpha03123/chaoxing-downloader.git
-cd chaoxing-downloader
-python -m venv .venv
-.\.venv\Scripts\python -m pip install -e .
-.\.venv\Scripts\python -m playwright install chromium
+pip install chaoxing-downloader
 ```
 
 ## 登录
@@ -41,6 +27,7 @@ chaoxing-downloader init
 --config config.toml            配置文件写入路径（默认 config.toml）
 --user-data-dir .chaoxing-browser   浏览器数据目录
 --timeout 300                   等待登录超时秒数
+--course-delay 2.0              预热课程入口时，每门课程进入前等待秒数
 ```
 
 ## 配置文件
@@ -79,6 +66,15 @@ chaoxing-downloader download-video --video video-6d0d9300
 
 # 清理缓存
 chaoxing-downloader clear-cache
+```
+
+课程/章节/视频查询和下载命令支持 `--delay <seconds>`，用于降低请求频率：
+
+```powershell
+chaoxing-downloader list-courses --delay 1.5
+chaoxing-downloader list-chapters --course course-54600bb5 --delay 1.5
+chaoxing-downloader list-videos --chapter chapter-0434a4f3 --delay 1.5
+chaoxing-downloader download-video --video video-6d0d9300 --delay 1.5
 ```
 
 所有命令支持 `--config <path>` 指定配置文件。

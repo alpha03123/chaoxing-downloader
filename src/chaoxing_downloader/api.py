@@ -25,9 +25,14 @@ class ChaoxingDownloader:
         list_chapters_impl: Callable[..., list[ChapterRecord]] = list_chapters,
         list_videos_impl: Callable[..., list[VideoRecord]] = list_videos,
         download_video_impl: Callable[..., Path] = download_video,
+        request_delay: float = 0.0,
     ) -> None:
+        _validate_delay(request_delay, name="request_delay")
         self.config = config
-        self.client = client or ChaoxingClient(SessionConfig(cookie=config.cookie, referer=config.referer))
+        self.client = client or ChaoxingClient(
+            SessionConfig(cookie=config.cookie, referer=config.referer),
+            request_delay=request_delay,
+        )
         self._list_courses = list_courses_impl
         self._list_chapters = list_chapters_impl
         self._list_videos = list_videos_impl
@@ -41,8 +46,12 @@ class ChaoxingDownloader:
         timeout_seconds: int = 300,
         login_url: str = DEFAULT_LOGIN_URL,
         cancel_check: CancelCheck | None = None,
+        request_delay: float = 0.0,
+        course_delay: float = 0.0,
         collect_impl: Callable[..., tuple[str, list[CourseRecord]]] = collect_cookie_header_with_browser,
     ) -> "ChaoxingDownloader":
+        _validate_delay(request_delay, name="request_delay")
+        _validate_delay(course_delay, name="course_delay")
         if cancel_check is not None and cancel_check():
             raise InitCancelled("初始化已取消")
         paths = StatePaths.from_dir(state_dir)
@@ -53,20 +62,23 @@ class ChaoxingDownloader:
             timeout_seconds=timeout_seconds,
             progress=None,
             cancel_check=cancel_check,
+            course_delay=course_delay,
         )
         config = make_config_from_state(cookie, paths)
         save_state(paths, config, warmed_courses)
-        return cls(config)
+        return cls(config, request_delay=request_delay)
 
     @classmethod
-    def load(cls, *, state_dir: str = ".chaoxing") -> "ChaoxingDownloader":
-        return cls(load_config_from_state(StatePaths.from_dir(state_dir)))
+    def load(cls, *, state_dir: str = ".chaoxing", request_delay: float = 0.0) -> "ChaoxingDownloader":
+        _validate_delay(request_delay, name="request_delay")
+        return cls(load_config_from_state(StatePaths.from_dir(state_dir)), request_delay=request_delay)
 
     @classmethod
-    def is_initialized(cls, *, state_dir: str = ".chaoxing") -> bool:
+    def is_initialized(cls, *, state_dir: str = ".chaoxing", request_delay: float = 0.0) -> bool:
+        _validate_delay(request_delay, name="request_delay")
         try:
             config = load_config_from_state(StatePaths.from_dir(state_dir))
-            client = ChaoxingClient(SessionConfig(cookie=config.cookie, referer=config.referer))
+            client = ChaoxingClient(SessionConfig(cookie=config.cookie, referer=config.referer), request_delay=request_delay)
             url = _entry_url_with_dynamic_params(config.base_url)
             return is_logged_in_home_page(url, client.get_text(url))
         except Exception:
@@ -107,3 +119,8 @@ def _entry_url_with_dynamic_params(url: str) -> str:
     params.setdefault("ws", "1")
     params["t"] = str(int(time.time() * 1000))
     return urlunparse(parsed._replace(query=urlencode(params)))
+
+
+def _validate_delay(value: float, *, name: str) -> None:
+    if value < 0:
+        raise ValueError(f"{name} must be greater than or equal to 0")

@@ -35,7 +35,9 @@ def run_browser_init(
     timeout_seconds: int = 300,
     progress: ProgressCallback | None = None,
     cancel_check: CancelCheck | None = None,
+    course_delay: float = 0.0,
 ) -> None:
+    _validate_delay(course_delay, name="course_delay")
     _raise_if_cancelled(cancel_check)
     _emit(progress, "start", "启动浏览器，等待超星授权")
     cookie, warmed_courses = collect_cookie_header_with_browser(
@@ -44,6 +46,7 @@ def run_browser_init(
         timeout_seconds=timeout_seconds,
         progress=progress,
         cancel_check=cancel_check,
+        course_delay=course_delay,
     )
     save_init_config(config_path, cookie=cookie, warmed_courses=warmed_courses)
     _emit(progress, "config", f"配置已写入 {config_path}")
@@ -56,7 +59,9 @@ def collect_cookie_header_with_browser(
     timeout_seconds: int,
     progress: ProgressCallback | None = None,
     cancel_check: CancelCheck | None = None,
+    course_delay: float = 0.0,
 ) -> tuple[str, list[CourseRecord]]:
+    _validate_delay(course_delay, name="course_delay")
     _raise_if_cancelled(cancel_check)
     try:
         from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
@@ -82,7 +87,12 @@ def collect_cookie_header_with_browser(
                     _emit(progress, "checking", "检测到登录 Cookie，验证课程主页")
                     page.goto(_base_url_with_dynamic_params(), wait_until="domcontentloaded")
                     if is_logged_in_home_page(page.url, page.content()):
-                        warmed_courses = warm_course_cookies(page, progress=progress, cancel_check=cancel_check)
+                        warmed_courses = warm_course_cookies(
+                            page,
+                            progress=progress,
+                            cancel_check=cancel_check,
+                            course_delay=course_delay,
+                        )
                         _emit(progress, "cookies", "导出最终 Cookie")
                         return format_cookie_header(context.cookies()), warmed_courses
                 page.wait_for_timeout(1000)
@@ -159,7 +169,9 @@ def warm_course_cookies(
     *,
     progress: ProgressCallback | None = None,
     cancel_check: CancelCheck | None = None,
+    course_delay: float = 0.0,
 ) -> list[CourseRecord]:
+    _validate_delay(course_delay, name="course_delay")
     _raise_if_cancelled(cancel_check)
     interaction_url = _extract_interaction_url(page.content())
     _emit(progress, "courses", "进入课程列表")
@@ -183,6 +195,7 @@ def warm_course_cookies(
     for index, record in enumerate(records, start=1):
         _raise_if_cancelled(cancel_check)
         _emit(progress, "course", f"[{index}/{len(records)}] 进入课程：{record.title}")
+        _wait_for_course_delay(page, course_delay)
         page.goto(record.course_url, wait_until="domcontentloaded")
         page.wait_for_timeout(500)
         course_study_url = page.url if _is_course_study_url(page.url) else ""
@@ -260,6 +273,16 @@ def _emit(progress: ProgressCallback | None, kind: str, message: str) -> None:
 def _raise_if_cancelled(cancel_check: CancelCheck | None) -> None:
     if cancel_check is not None and cancel_check():
         raise InitCancelled("初始化已取消")
+
+
+def _validate_delay(value: float, *, name: str) -> None:
+    if value < 0:
+        raise ValueError(f"{name} must be greater than or equal to 0")
+
+
+def _wait_for_course_delay(page, course_delay: float) -> None:
+    if course_delay > 0:
+        page.wait_for_timeout(int(course_delay * 1000))
 
 
 def _base_url_with_dynamic_params() -> str:

@@ -18,6 +18,8 @@ from chaoxing_downloader import (
 downloader = ChaoxingDownloader.init(
     state_dir=".chaoxing",
     timeout_seconds=300,
+    request_delay=0.0,
+    course_delay=0.0,
     cancel_check=lambda: False,
 )
 ```
@@ -30,6 +32,8 @@ downloader = ChaoxingDownloader.init(
 | --- | --- | --- | --- |
 | `state_dir` | `str` | `".chaoxing"` | 库模式状态目录 |
 | `timeout_seconds` | `int` | `300` | 等待登录的超时秒数 |
+| `request_delay` | `float` | `0.0` | 返回实例后，每次普通 HTTP 请求前等待的秒数 |
+| `course_delay` | `float` | `0.0` | 初始化预热课程入口时，每门课程进入前等待的秒数 |
 | `cancel_check` | `Callable[[], bool] \| None` | `None` | 可选取消检查函数；返回 `True` 时取消初始化 |
 
 返回：
@@ -55,6 +59,8 @@ courses = downloader.list_courses()
 - 这是阻塞式 API，会弹出浏览器。
 - 浏览器用户数据、session、缓存和默认下载目录都在 `state_dir` 下。
 - `cancel_check` 会在等待登录和课程入口预热过程中被反复调用。
+- `course_delay` 只影响初始化时的课程入口预热。
+- `request_delay` 只影响返回的 `ChaoxingDownloader` 实例后续发起的普通 HTTP 请求。
 - 取消时抛出 `InitCancelled`
 
 取消示例：
@@ -77,7 +83,7 @@ except InitCancelled:
 ## `ChaoxingDownloader.load()`
 
 ```python
-downloader = ChaoxingDownloader.load(state_dir=".chaoxing")
+downloader = ChaoxingDownloader.load(state_dir=".chaoxing", request_delay=0.0)
 ```
 
 从已存在的 `state_dir` 加载登录状态，不弹浏览器。
@@ -87,6 +93,7 @@ downloader = ChaoxingDownloader.load(state_dir=".chaoxing")
 | 参数 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | `state_dir` | `str` | `".chaoxing"` | 与 `init()` 相同的状态目录 |
+| `request_delay` | `float` | `0.0` | 每次普通 HTTP 请求前等待的秒数 |
 
 返回：
 
@@ -105,7 +112,7 @@ ChaoxingDownloader(...)
 ## `ChaoxingDownloader.is_initialized()`
 
 ```python
-ready = ChaoxingDownloader.is_initialized(state_dir=".chaoxing")
+ready = ChaoxingDownloader.is_initialized(state_dir=".chaoxing", request_delay=0.0)
 ```
 
 判断指定 `state_dir` 是否已经存在可用登录状态。
@@ -115,6 +122,7 @@ ready = ChaoxingDownloader.is_initialized(state_dir=".chaoxing")
 | 参数 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | `state_dir` | `str` | `".chaoxing"` | 与 `init()` / `load()` 相同的状态目录 |
+| `request_delay` | `float` | `0.0` | 检测 Cookie 可用性请求前等待的秒数 |
 
 返回：
 
@@ -125,10 +133,10 @@ ready = ChaoxingDownloader.is_initialized(state_dir=".chaoxing")
 示例：
 
 ```python
-if ChaoxingDownloader.is_initialized(state_dir=".chaoxing"):
-    downloader = ChaoxingDownloader.load(state_dir=".chaoxing")
+if ChaoxingDownloader.is_initialized(state_dir=".chaoxing", request_delay=1.5):
+    downloader = ChaoxingDownloader.load(state_dir=".chaoxing", request_delay=1.5)
 else:
-    downloader = ChaoxingDownloader.init(state_dir=".chaoxing")
+    downloader = ChaoxingDownloader.init(state_dir=".chaoxing", request_delay=1.5, course_delay=2.0)
 ```
 
 这个方法会联网请求学习通课程主页，用于避免本地 `session.json` 存在但 Cookie 已过期时仍返回 `True`。本地状态不存在、状态文件损坏、Cookie 失效或请求失败都会返回 `False`。

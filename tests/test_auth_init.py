@@ -84,6 +84,43 @@ def test_warm_course_cookies_visits_course_entries() -> None:
     assert page.visited[-1] == "https://mooc1-1.chaoxing.com/mooc-ans/visit/stucoursemiddle?courseid=261641822&clazzid=142332957&cpi=407073562"
 
 
+def test_warm_course_cookies_waits_before_each_course_entry() -> None:
+    page = FakePage(
+        home_html='dataurl="https://mooc1-1.chaoxing.com/visit/interaction?s=abc"',
+        course_list_html="""
+            <ul id="courseList">
+              <li class="course" courseid="1" clazzid="2" personid="3">
+                <div class="course-name">第一门课</div>
+                <div class="course-info"><a href="https://example.test/1">进入</a></div>
+              </li>
+              <li class="course" courseid="4" clazzid="5" personid="6">
+                <div class="course-name">第二门课</div>
+                <div class="course-info"><a href="https://example.test/2">进入</a></div>
+              </li>
+            </ul>
+        """,
+    )
+
+    warm_course_cookies(page, course_delay=1.5)
+
+    assert page.waited == [1500, 500, 1500, 500]
+
+
+def test_warm_course_cookies_rejects_negative_course_delay() -> None:
+    page = FakePage(
+        home_html='dataurl="https://mooc1-1.chaoxing.com/visit/interaction?s=abc"',
+        course_list_html="",
+    )
+
+    try:
+        warm_course_cookies(page, course_delay=-0.1)
+    except ValueError as exc:
+        assert "course_delay" in str(exc)
+        return
+
+    raise AssertionError("expected ValueError")
+
+
 def test_warm_course_cookies_can_be_cancelled_before_request() -> None:
     page = FakePage(
         home_html='dataurl="https://mooc1-1.chaoxing.com/visit/interaction?s=abc"',
@@ -162,6 +199,7 @@ class FakePage:
         self.course_list_html = course_list_html
         self._cookies = cookies or []
         self.visited: list[str] = []
+        self.waited: list[int] = []
         self.request = FakeRequest(course_list_html)
         self.context = self
         self.url = ""
@@ -174,6 +212,7 @@ class FakePage:
         return self.home_html
 
     def wait_for_timeout(self, timeout: int) -> None:
+        self.waited.append(timeout)
         return None
 
     def cookies(self) -> list[dict[str, str]]:

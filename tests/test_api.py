@@ -83,6 +83,18 @@ def test_downloader_init_passes_cancel_check(tmp_path: Path) -> None:
     assert isinstance(downloader, ChaoxingDownloader)
 
 
+def test_downloader_init_passes_course_delay(tmp_path: Path) -> None:
+    state_dir = tmp_path / ".chaoxing"
+
+    def collect_impl(**kwargs):
+        assert kwargs["course_delay"] == 2.5
+        return ("UID=1; vc3=abc", [])
+
+    downloader = ChaoxingDownloader.init(state_dir=str(state_dir), course_delay=2.5, collect_impl=collect_impl)
+
+    assert isinstance(downloader, ChaoxingDownloader)
+
+
 def test_downloader_init_raises_when_cancel_check_is_already_true(tmp_path: Path) -> None:
     def collect_impl(**kwargs):
         raise AssertionError("collect_impl should not run after cancellation")
@@ -128,8 +140,9 @@ def test_downloader_is_initialized_validates_cookie_with_home_page(monkeypatch, 
     requested_urls: list[str] = []
 
     class FakeClient:
-        def __init__(self, session_config):
+        def __init__(self, session_config, *, request_delay=0.0):
             assert session_config.cookie == "UID=1"
+            assert request_delay == 1.25
 
         def get_text(self, url: str) -> str:
             requested_urls.append(url)
@@ -138,13 +151,13 @@ def test_downloader_is_initialized_validates_cookie_with_home_page(monkeypatch, 
     monkeypatch.setattr(api_module, "load_config_from_state", lambda paths: AppConfig(cookie="UID=1", referer="", base_url="https://i.chaoxing.com/base"))
     monkeypatch.setattr(api_module, "ChaoxingClient", FakeClient)
 
-    assert ChaoxingDownloader.is_initialized(state_dir=str(state_dir))
+    assert ChaoxingDownloader.is_initialized(state_dir=str(state_dir), request_delay=1.25)
     assert requested_urls and requested_urls[0].startswith("https://i.chaoxing.com/base?ws=1&t=")
 
 
 def test_downloader_is_initialized_returns_false_when_cookie_expired(monkeypatch, tmp_path: Path) -> None:
     class FakeClient:
-        def __init__(self, session_config):
+        def __init__(self, session_config, *, request_delay=0.0):
             pass
 
         def get_text(self, url: str) -> str:
