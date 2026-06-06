@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from chaoxing_downloader.auth_init import (
+    InitCancelled,
     format_cookie_header,
     is_logged_in_home_page,
     save_init_config,
@@ -81,6 +82,52 @@ def test_warm_course_cookies_visits_course_entries() -> None:
 
     assert len(records) == 1
     assert page.visited[-1] == "https://mooc1-1.chaoxing.com/mooc-ans/visit/stucoursemiddle?courseid=261641822&clazzid=142332957&cpi=407073562"
+
+
+def test_warm_course_cookies_can_be_cancelled_before_request() -> None:
+    page = FakePage(
+        home_html='dataurl="https://mooc1-1.chaoxing.com/visit/interaction?s=abc"',
+        course_list_html="",
+    )
+
+    try:
+        warm_course_cookies(page, cancel_check=lambda: True)
+    except InitCancelled:
+        return
+
+    raise AssertionError("expected InitCancelled")
+
+
+def test_warm_course_cookies_can_be_cancelled_between_courses() -> None:
+    page = FakePage(
+        home_html='dataurl="https://mooc1-1.chaoxing.com/visit/interaction?s=abc"',
+        course_list_html="""
+            <ul id="courseList">
+              <li class="course" courseid="1" clazzid="2" personid="3">
+                <div class="course-name">第一门课</div>
+                <div class="course-info"><a href="https://example.test/1">进入</a></div>
+              </li>
+              <li class="course" courseid="4" clazzid="5" personid="6">
+                <div class="course-name">第二门课</div>
+                <div class="course-info"><a href="https://example.test/2">进入</a></div>
+              </li>
+            </ul>
+        """,
+    )
+    calls = 0
+
+    def cancel_check() -> bool:
+        nonlocal calls
+        calls += 1
+        return calls >= 2
+
+    try:
+        warm_course_cookies(page, cancel_check=cancel_check)
+    except InitCancelled:
+        assert page.visited == ["https://mooc1-1.chaoxing.com/visit/interaction?s=abc"]
+        return
+
+    raise AssertionError("expected InitCancelled")
 
 
 def test_warm_course_cookies_reports_course_cookie_status() -> None:

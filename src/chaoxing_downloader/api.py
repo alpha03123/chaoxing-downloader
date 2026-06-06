@@ -5,7 +5,7 @@ import time
 from typing import Callable
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
-from .auth_init import DEFAULT_LOGIN_URL, collect_cookie_header_with_browser, is_logged_in_home_page
+from .auth_init import DEFAULT_LOGIN_URL, CancelCheck, InitCancelled, collect_cookie_header_with_browser, is_logged_in_home_page
 from .http_client import ChaoxingClient
 from .models import AppConfig, ChapterRecord, CourseRecord, VideoRecord
 from .session import SessionConfig
@@ -40,8 +40,11 @@ class ChaoxingDownloader:
         state_dir: str = ".chaoxing",
         timeout_seconds: int = 300,
         login_url: str = DEFAULT_LOGIN_URL,
+        cancel_check: CancelCheck | None = None,
         collect_impl: Callable[..., tuple[str, list[CourseRecord]]] = collect_cookie_header_with_browser,
     ) -> "ChaoxingDownloader":
+        if cancel_check is not None and cancel_check():
+            raise InitCancelled("初始化已取消")
         paths = StatePaths.from_dir(state_dir)
         paths.root.mkdir(parents=True, exist_ok=True)
         cookie, warmed_courses = collect_impl(
@@ -49,6 +52,7 @@ class ChaoxingDownloader:
             login_url=login_url,
             timeout_seconds=timeout_seconds,
             progress=None,
+            cancel_check=cancel_check,
         )
         config = make_config_from_state(cookie, paths)
         save_state(paths, config, warmed_courses)

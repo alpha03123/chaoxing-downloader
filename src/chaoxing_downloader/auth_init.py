@@ -19,7 +19,12 @@ class InitError(ValueError):
     pass
 
 
+class InitCancelled(InitError):
+    pass
+
+
 ProgressCallback = Callable[[str, str], None]
+CancelCheck = Callable[[], bool]
 
 
 def run_browser_init(
@@ -29,13 +34,16 @@ def run_browser_init(
     login_url: str = DEFAULT_LOGIN_URL,
     timeout_seconds: int = 300,
     progress: ProgressCallback | None = None,
+    cancel_check: CancelCheck | None = None,
 ) -> None:
+    _raise_if_cancelled(cancel_check)
     _emit(progress, "start", "启动浏览器，等待超星授权")
     cookie, warmed_courses = collect_cookie_header_with_browser(
         user_data_dir=user_data_dir,
         login_url=login_url,
         timeout_seconds=timeout_seconds,
         progress=progress,
+        cancel_check=cancel_check,
     )
     save_init_config(config_path, cookie=cookie, warmed_courses=warmed_courses)
     _emit(progress, "config", f"配置已写入 {config_path}")
@@ -47,7 +55,9 @@ def collect_cookie_header_with_browser(
     login_url: str,
     timeout_seconds: int,
     progress: ProgressCallback | None = None,
+    cancel_check: CancelCheck | None = None,
 ) -> tuple[str, list[CourseRecord]]:
+    _raise_if_cancelled(cancel_check)
     try:
         from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
         from playwright.sync_api import sync_playwright
@@ -64,6 +74,7 @@ def collect_cookie_header_with_browser(
             page.goto(login_url, wait_until="domcontentloaded")
             deadline = time.monotonic() + timeout_seconds
             while time.monotonic() < deadline:
+                _raise_if_cancelled(cancel_check)
                 _emit(progress, "waiting", "等待网站授权，请在浏览器中完成登录")
                 cookies = context.cookies()
                 cookie_header = format_cookie_header(cookies)
@@ -71,7 +82,7 @@ def collect_cookie_header_with_browser(
                     _emit(progress, "checking", "检测到登录 Cookie，验证课程主页")
                     page.goto(_base_url_with_dynamic_params(), wait_until="domcontentloaded")
                     if is_logged_in_home_page(page.url, page.content()):
-                        warmed_courses = warm_course_cookies(page, progress=progress)
+                        warmed_courses = warm_course_cookies(page, progress=progress, cancel_check=cancel_check)
                         _emit(progress, "cookies", "导出最终 Cookie")
                         return format_cookie_header(context.cookies()), warmed_courses
                 page.wait_for_timeout(1000)
@@ -143,10 +154,17 @@ def is_logged_in_home_page(url: str, html: str) -> bool:
     return "visit/interaction" in html
 
 
-def warm_course_cookies(page, *, progress: ProgressCallback | None = None) -> list[CourseRecord]:
+def warm_course_cookies(
+    page,
+    *,
+    progress: ProgressCallback | None = None,
+    cancel_check: CancelCheck | None = None,
+) -> list[CourseRecord]:
+    _raise_if_cancelled(cancel_check)
     interaction_url = _extract_interaction_url(page.content())
     _emit(progress, "courses", "进入课程列表")
     page.goto(interaction_url, wait_until="domcontentloaded")
+    _raise_if_cancelled(cancel_check)
     response = page.request.post(
         "https://mooc1-1.chaoxing.com/mooc-ans/visit/courselistdata",
         form={
@@ -163,6 +181,7 @@ def warm_course_cookies(page, *, progress: ProgressCallback | None = None) -> li
     _emit(progress, "courses", f"解析到 {len(records)} 门课程，开始采集课程入口参数")
     warmed_records: list[CourseRecord] = []
     for index, record in enumerate(records, start=1):
+        _raise_if_cancelled(cancel_check)
         _emit(progress, "course", f"[{index}/{len(records)}] 进入课程：{record.title}")
         page.goto(record.course_url, wait_until="domcontentloaded")
         page.wait_for_timeout(500)
@@ -236,6 +255,11 @@ def _to_course_record(item: CourseRecord | Mapping[str, object]) -> CourseRecord
 def _emit(progress: ProgressCallback | None, kind: str, message: str) -> None:
     if progress is not None:
         progress(kind, message)
+
+
+def _raise_if_cancelled(cancel_check: CancelCheck | None) -> None:
+    if cancel_check is not None and cancel_check():
+        raise InitCancelled("初始化已取消")
 
 
 def _base_url_with_dynamic_params() -> str:

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from chaoxing_downloader import ChaoxingDownloader, CourseRecord
+from chaoxing_downloader import ChaoxingDownloader, CourseRecord, InitCancelled
 import chaoxing_downloader.api as api_module
 from chaoxing_downloader.cache_store import load_cache
 from chaoxing_downloader.models import AppConfig
@@ -66,6 +66,33 @@ def test_downloader_init_writes_state_dir(tmp_path: Path) -> None:
     assert isinstance(downloader, ChaoxingDownloader)
     assert (state_dir / "session.json").exists()
     assert state.courses[0].course_study_url.endswith("enc=abc&t=123")
+
+
+def test_downloader_init_passes_cancel_check(tmp_path: Path) -> None:
+    state_dir = tmp_path / ".chaoxing"
+
+    def cancel_check() -> bool:
+        return False
+
+    def collect_impl(**kwargs):
+        assert kwargs["cancel_check"] is cancel_check
+        return ("UID=1; vc3=abc", [])
+
+    downloader = ChaoxingDownloader.init(state_dir=str(state_dir), cancel_check=cancel_check, collect_impl=collect_impl)
+
+    assert isinstance(downloader, ChaoxingDownloader)
+
+
+def test_downloader_init_raises_when_cancel_check_is_already_true(tmp_path: Path) -> None:
+    def collect_impl(**kwargs):
+        raise AssertionError("collect_impl should not run after cancellation")
+
+    try:
+        ChaoxingDownloader.init(state_dir=str(tmp_path / ".chaoxing"), cancel_check=lambda: True, collect_impl=collect_impl)
+    except InitCancelled:
+        return
+
+    raise AssertionError("expected InitCancelled")
 
 
 def test_downloader_load_reads_state_dir(tmp_path: Path) -> None:

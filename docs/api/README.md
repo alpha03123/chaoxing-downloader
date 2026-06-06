@@ -33,6 +33,17 @@ videos = downloader.list_videos(chapters[0].chapter_key)
 path = downloader.download_video(videos[0].video_key)
 ```
 
+如果在 GUI 或后台任务里需要取消登录初始化，可以传入 `cancel_check`：
+
+```python
+from chaoxing_downloader import ChaoxingDownloader, InitCancelled
+
+try:
+    downloader = ChaoxingDownloader.init(cancel_check=lambda: should_cancel)
+except InitCancelled:
+    print("init cancelled")
+```
+
 再次使用：
 
 ```python
@@ -73,6 +84,7 @@ downloader = ChaoxingDownloader.load(state_dir="runtime/chaoxing")
 downloader = ChaoxingDownloader.init(
     state_dir=".chaoxing",
     timeout_seconds=300,
+    cancel_check=lambda: False,
 )
 ```
 
@@ -86,7 +98,7 @@ downloader = ChaoxingDownloader.init(
 6. 保存浏览器状态、session 和 cache。
 7. 返回可直接使用的 `ChaoxingDownloader` 实例。
 
-API当前还是阻塞的
+API 当前是阻塞的。`cancel_check` 会在等待登录和课程入口预热过程中被反复调用；返回 `True` 时抛出 `InitCancelled`。
 ## `load()`
 
 ```python

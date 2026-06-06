@@ -5,6 +5,7 @@
 ```python
 from chaoxing_downloader import (
     ChaoxingDownloader,
+    InitCancelled,
     CourseRecord,
     ChapterRecord,
     VideoRecord,
@@ -17,6 +18,7 @@ from chaoxing_downloader import (
 downloader = ChaoxingDownloader.init(
     state_dir=".chaoxing",
     timeout_seconds=300,
+    cancel_check=lambda: False,
 )
 ```
 
@@ -28,6 +30,7 @@ downloader = ChaoxingDownloader.init(
 | --- | --- | --- | --- |
 | `state_dir` | `str` | `".chaoxing"` | 库模式状态目录 |
 | `timeout_seconds` | `int` | `300` | 等待登录的超时秒数 |
+| `cancel_check` | `Callable[[], bool] \| None` | `None` | 可选取消检查函数；返回 `True` 时取消初始化 |
 
 返回：
 
@@ -51,6 +54,24 @@ courses = downloader.list_courses()
 
 - 这是阻塞式 API，会弹出浏览器。
 - 浏览器用户数据、session、缓存和默认下载目录都在 `state_dir` 下。
+- `cancel_check` 会在等待登录和课程入口预热过程中被反复调用。
+- 取消时抛出 `InitCancelled`，不会返回半初始化对象。
+
+取消示例：
+
+```python
+from chaoxing_downloader import ChaoxingDownloader, InitCancelled
+
+cancelled = False
+
+try:
+    downloader = ChaoxingDownloader.init(
+        state_dir=".chaoxing",
+        cancel_check=lambda: cancelled,
+    )
+except InitCancelled:
+    print("init cancelled")
+```
 
 
 ## `ChaoxingDownloader.load()`
