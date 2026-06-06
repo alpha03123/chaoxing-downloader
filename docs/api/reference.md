@@ -55,7 +55,7 @@ courses = downloader.list_courses()
 - 这是阻塞式 API，会弹出浏览器。
 - 浏览器用户数据、session、缓存和默认下载目录都在 `state_dir` 下。
 - `cancel_check` 会在等待登录和课程入口预热过程中被反复调用。
-- 取消时抛出 `InitCancelled`，不会返回半初始化对象。
+- 取消时抛出 `InitCancelled`
 
 取消示例：
 
