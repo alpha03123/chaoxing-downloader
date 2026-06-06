@@ -109,7 +109,7 @@ else:
     downloader = ChaoxingDownloader.init(state_dir=".chaoxing")
 ```
 
-用于判断指定 `state_dir` 是否已经存在本地登录状态。这个方法只检查本地 `session.json` 是否存在，不联网验证 Cookie 是否仍然有效。
+用于判断指定 `state_dir` 是否已经存在可用登录状态。以及cookie是否可用。
 
 ## 查询课程
 

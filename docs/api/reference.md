@@ -87,7 +87,7 @@ ChaoxingDownloader(...)
 ready = ChaoxingDownloader.is_initialized(state_dir=".chaoxing")
 ```
 
-判断指定 `state_dir` 是否已经存在本地登录状态。
+判断指定 `state_dir` 是否已经存在可用登录状态。
 
 参数：
 
@@ -99,7 +99,7 @@ ready = ChaoxingDownloader.is_initialized(state_dir=".chaoxing")
 
 | 类型 | 说明 |
 | --- | --- |
-| `bool` | 如果 `state_dir/session.json` 存在则为 `True`，否则为 `False` |
+| `bool` | 本地状态存在且 Cookie 仍可访问学习通课程主页时为 `True`，否则为 `False` |
 
 示例：
 
@@ -110,7 +110,7 @@ else:
     downloader = ChaoxingDownloader.init(state_dir=".chaoxing")
 ```
 
-这个方法只检查本地状态文件是否存在，不联网验证 Cookie 是否仍然有效。如果状态文件损坏或 Cookie 过期，后续 `load()` 或请求课程时仍会抛出错误。
+这个方法会联网请求学习通课程主页，用于避免本地 `session.json` 存在但 Cookie 已过期时仍返回 `True`。本地状态不存在、状态文件损坏、Cookie 失效或请求失败都会返回 `False`。
 
 ## `list_courses()`
 

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+import time
 from typing import Callable
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
-from .auth_init import DEFAULT_LOGIN_URL, collect_cookie_header_with_browser
+from .auth_init import DEFAULT_LOGIN_URL, collect_cookie_header_with_browser, is_logged_in_home_page
 from .http_client import ChaoxingClient
 from .models import AppConfig, ChapterRecord, CourseRecord, VideoRecord
 from .session import SessionConfig
@@ -58,7 +60,13 @@ class ChaoxingDownloader:
 
     @classmethod
     def is_initialized(cls, *, state_dir: str = ".chaoxing") -> bool:
-        return StatePaths.from_dir(state_dir).session.exists()
+        try:
+            config = load_config_from_state(StatePaths.from_dir(state_dir))
+            client = ChaoxingClient(SessionConfig(cookie=config.cookie, referer=config.referer))
+            url = _entry_url_with_dynamic_params(config.base_url)
+            return is_logged_in_home_page(url, client.get_text(url))
+        except Exception:
+            return False
 
     def list_courses(self, *, url: str = "") -> list[CourseRecord]:
         return self._list_courses(self.client, self.config, url_override=url)
@@ -77,3 +85,13 @@ class ChaoxingDownloader:
         progress: DownloadProgress | None = None,
     ) -> Path:
         return self._download_video(self.client, self.config, video_key=video_key, output_dir=output_dir, progress=progress)
+
+
+def _entry_url_with_dynamic_params(url: str) -> str:
+    parsed = urlparse(url)
+    if parsed.netloc != "i.chaoxing.com" or parsed.path != "/base":
+        return url
+    params = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    params.setdefault("ws", "1")
+    params["t"] = str(int(time.time() * 1000))
+    return urlunparse(parsed._replace(query=urlencode(params)))

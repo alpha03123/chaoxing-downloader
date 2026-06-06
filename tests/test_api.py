@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from chaoxing_downloader import ChaoxingDownloader, CourseRecord
+import chaoxing_downloader.api as api_module
 from chaoxing_downloader.cache_store import load_cache
 from chaoxing_downloader.models import AppConfig
 
@@ -89,15 +90,43 @@ def test_downloader_load_reads_state_dir(tmp_path: Path) -> None:
     assert downloader.config.cache_path == str(state_dir / "cache.json")
 
 
-def test_downloader_is_initialized_checks_state_session(tmp_path: Path) -> None:
+def test_downloader_is_initialized_returns_false_when_state_missing(tmp_path: Path) -> None:
     state_dir = tmp_path / ".chaoxing"
 
     assert not ChaoxingDownloader.is_initialized(state_dir=str(state_dir))
 
-    state_dir.mkdir()
-    (state_dir / "session.json").write_text("{}", encoding="utf-8")
+
+def test_downloader_is_initialized_validates_cookie_with_home_page(monkeypatch, tmp_path: Path) -> None:
+    state_dir = tmp_path / ".chaoxing"
+    requested_urls: list[str] = []
+
+    class FakeClient:
+        def __init__(self, session_config):
+            assert session_config.cookie == "UID=1"
+
+        def get_text(self, url: str) -> str:
+            requested_urls.append(url)
+            return 'dataurl="https://mooc1-1.chaoxing.com/visit/interaction?s=abc"'
+
+    monkeypatch.setattr(api_module, "load_config_from_state", lambda paths: AppConfig(cookie="UID=1", referer="", base_url="https://i.chaoxing.com/base"))
+    monkeypatch.setattr(api_module, "ChaoxingClient", FakeClient)
 
     assert ChaoxingDownloader.is_initialized(state_dir=str(state_dir))
+    assert requested_urls and requested_urls[0].startswith("https://i.chaoxing.com/base?ws=1&t=")
+
+
+def test_downloader_is_initialized_returns_false_when_cookie_expired(monkeypatch, tmp_path: Path) -> None:
+    class FakeClient:
+        def __init__(self, session_config):
+            pass
+
+        def get_text(self, url: str) -> str:
+            return "<title>用户登录</title>"
+
+    monkeypatch.setattr(api_module, "load_config_from_state", lambda paths: AppConfig(cookie="UID=1", referer="", base_url="https://i.chaoxing.com/base"))
+    monkeypatch.setattr(api_module, "ChaoxingClient", FakeClient)
+
+    assert not ChaoxingDownloader.is_initialized(state_dir=str(tmp_path / ".chaoxing"))
 
 
 def test_downloader_download_video_passes_output_dir() -> None:
