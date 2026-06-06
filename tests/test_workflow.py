@@ -355,3 +355,42 @@ def test_download_video_writes_to_explicit_output_dir(tmp_path) -> None:
     assert path == output_dir / "1.1.mp4"
     assert path.read_bytes() == b"video-bytes"
     assert progress_calls == [(11, 11)]
+
+
+def test_download_video_writes_to_explicit_filename(tmp_path) -> None:
+    cache_path = tmp_path / "cache.json"
+    output_dir = tmp_path / "downloads"
+    save_cache(
+        str(cache_path),
+        CacheState(
+            videos=[
+                VideoRecord(
+                    video_key="video-demo",
+                    chapter_key="chapter-demo",
+                    title="demo",
+                    object_id="object-1",
+                    job_id="job-1",
+                    mid="mid-1",
+                    media_url="https://cdn.example.test/1.mp4",
+                    filename="source.mp4",
+                )
+            ]
+        ),
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if str(request.url) == "https://cdn.example.test/1.mp4":
+            return httpx.Response(200, content=b"video-bytes")
+        return httpx.Response(404)
+
+    client = ChaoxingClient(
+        SessionConfig(cookie="UID=1"),
+        transport=httpx.MockTransport(handler),
+    )
+    config = AppConfig(cookie="UID=1", referer="", cache_path=str(cache_path))
+
+    path = download_video(client, config, video_key="video-demo", output_dir=output_dir, filename="custom.mp4")
+
+    assert path == output_dir / "custom.mp4"
+    assert path.read_bytes() == b"video-bytes"
+    assert not (output_dir / "source.mp4").exists()

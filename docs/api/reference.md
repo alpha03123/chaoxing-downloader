@@ -302,6 +302,12 @@ path = downloader.download_video(video_key)
 path = downloader.download_video(video_key, output_dir="my-downloads")
 ```
 
+也可以指定本次下载文件名：
+
+```python
+path = downloader.download_video(video_key, filename="lesson-1.mp4")
+```
+
 也可以传入进度回调：
 
 ```python
@@ -320,6 +326,7 @@ path = downloader.download_video(video_key, progress=on_progress)
 | --- | --- | --- |
 | `video_key` | `str` | 来自 `VideoRecord.video_key` |
 | `output_dir` | `str \| pathlib.Path \| None` | 可选；覆盖本次下载目录，不传则使用 `state_dir/downloads/` |
+| `filename` | `str \| None` | 可选；覆盖本次下载文件名，不传则使用视频原始文件名 |
 | `progress` | `Callable[[int, int \| None], None] \| None` | 可选；每写入一个下载分块后回调，参数为已下载字节数和总字节数 |
 
 如果服务器没有返回 `Content-Length`，`progress` 的第二个参数 `total` 为 `None`。

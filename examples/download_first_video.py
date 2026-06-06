@@ -52,7 +52,8 @@ def main() -> None:
     video = videos[0]
     print(f"[video] {video.video_key} {video.title} {video.filename}")
 
-    path = downloader.download_video(video.video_key, output_dir=DOWNLOAD_DIR, progress=show_progress)
+    filename = video.filename or f"{video.video_key}.mp4"
+    path = downloader.download_video(video.video_key, output_dir=DOWNLOAD_DIR, filename=filename, progress=show_progress)
     print()
     print(f"[downloaded] {path.resolve()}")
 

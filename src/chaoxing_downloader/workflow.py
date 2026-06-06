@@ -112,6 +112,7 @@ def download_video(
     *,
     video_key: str,
     output_dir: str | Path | None = None,
+    filename: str | None = None,
     progress: DownloadProgress | None = None,
 ) -> Path:
     state = load_cache(config.cache_path)
@@ -119,16 +120,19 @@ def download_video(
     if video is None:
         raise WorkflowError(f"错误：找不到视频 {video_key}，请先运行 list-videos")
     media_url = video.media_url
-    filename = video.filename or f"{video.object_id}.mp4"
+    target_filename = filename.strip() if filename is not None else ""
+    if not target_filename:
+        target_filename = video.filename or f"{video.object_id}.mp4"
     if not media_url:
         status_payload = resolve_media_status(client, video.object_id)
         media_url = _pick_media_url(status_payload)
         if not media_url:
             raise WorkflowError(f"错误：视频状态接口返回异常（status={status_payload.get('status')}），object_id={video.object_id}")
-        filename = str(status_payload.get("filename") or filename)
+        if filename is None:
+            target_filename = str(status_payload.get("filename") or target_filename)
     target_dir = Path(output_dir) if output_dir is not None else Path(config.output_dir)
     target_dir.mkdir(parents=True, exist_ok=True)
-    target = target_dir / filename
+    target = target_dir / target_filename
     downloaded = 0
     with target.open("wb") as file:
         for chunk, total in client.iter_bytes(media_url):

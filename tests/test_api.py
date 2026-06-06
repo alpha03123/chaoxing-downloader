@@ -129,15 +129,15 @@ def test_downloader_is_initialized_returns_false_when_cookie_expired(monkeypatch
     assert not ChaoxingDownloader.is_initialized(state_dir=str(tmp_path / ".chaoxing"))
 
 
-def test_downloader_download_video_passes_output_dir() -> None:
+def test_downloader_download_video_passes_options() -> None:
     progress_calls: list[tuple[int, int | None]] = []
-    calls: list[tuple[str, str | Path | None, object]] = []
+    calls: list[tuple[str, str | Path | None, str | None, object]] = []
 
     def progress(downloaded: int, total: int | None) -> None:
         progress_calls.append((downloaded, total))
 
-    def download_video_impl(client, config, *, video_key: str, output_dir=None, progress=None) -> Path:
-        calls.append((video_key, output_dir, progress))
+    def download_video_impl(client, config, *, video_key: str, output_dir=None, filename=None, progress=None) -> Path:
+        calls.append((video_key, output_dir, filename, progress))
         return Path("custom/video.mp4")
 
     downloader = ChaoxingDownloader(
@@ -146,8 +146,8 @@ def test_downloader_download_video_passes_output_dir() -> None:
         download_video_impl=download_video_impl,
     )
 
-    path = downloader.download_video("video-demo", output_dir="my-downloads", progress=progress)
+    path = downloader.download_video("video-demo", output_dir="my-downloads", filename="custom.mp4", progress=progress)
 
     assert path == Path("custom/video.mp4")
-    assert calls == [("video-demo", "my-downloads", progress)]
+    assert calls == [("video-demo", "my-downloads", "custom.mp4", progress)]
     assert progress_calls == []

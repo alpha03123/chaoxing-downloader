@@ -82,9 +82,17 @@ class ChaoxingDownloader:
         video_key: str,
         *,
         output_dir: str | Path | None = None,
+        filename: str | None = None,
         progress: DownloadProgress | None = None,
     ) -> Path:
-        return self._download_video(self.client, self.config, video_key=video_key, output_dir=output_dir, progress=progress)
+        return self._download_video(
+            self.client,
+            self.config,
+            video_key=video_key,
+            output_dir=output_dir,
+            filename=filename,
+            progress=progress,
+        )
 
 
 def _entry_url_with_dynamic_params(url: str) -> str:

@@ -187,6 +187,12 @@ path = downloader.download_video(video_key)
 path = downloader.download_video(video_key, output_dir="my-downloads")
 ```
 
+可以用 `filename` 覆盖本次下载文件名：
+
+```python
+path = downloader.download_video(video_key, filename="lesson-1.mp4")
+```
+
 可以用 `progress` 获取下载进度：
 
 ```python
