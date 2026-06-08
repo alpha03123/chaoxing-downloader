@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from http.cookies import SimpleCookie
 import time
 from pathlib import Path
 from typing import Callable, Mapping
+
+import httpx
 
 from .cache_store import make_course_key, save_cache
 from .course_catalog_parser import parse_course_list
@@ -25,6 +28,10 @@ class InitCancelled(InitError):
 
 ProgressCallback = Callable[[str, str], None]
 CancelCheck = Callable[[], bool]
+BrowserPageFactory = Callable[[str], object]
+HttpClientFactory = Callable[[str], httpx.Client]
+CourseWarmImpl = Callable[..., tuple[str, list[CourseRecord]]]
+Sleep = Callable[[float], None]
 
 
 def run_browser_init(
@@ -60,47 +67,36 @@ def collect_cookie_header_with_browser(
     progress: ProgressCallback | None = None,
     cancel_check: CancelCheck | None = None,
     course_delay: float = 0.0,
+    page_factory: BrowserPageFactory | None = None,
+    warm_impl: CourseWarmImpl | None = None,
+    sleep: Sleep = time.sleep,
 ) -> tuple[str, list[CourseRecord]]:
     _validate_delay(course_delay, name="course_delay")
     _raise_if_cancelled(cancel_check)
+    factory = page_factory or _create_drission_page
+    warmer = warm_impl or warm_course_cookies
+    page = factory(user_data_dir)
     try:
-        from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
-        from playwright.sync_api import sync_playwright
-    except ImportError as exc:
-        raise InitError("错误：缺少 Playwright，请先安装依赖并运行 python -m playwright install chromium") from exc
-
-    with sync_playwright() as playwright:
-        context = playwright.chromium.launch_persistent_context(
-            user_data_dir=user_data_dir,
-            headless=False,
-        )
-        try:
-            page = context.pages[0] if context.pages else context.new_page()
-            page.goto(login_url, wait_until="domcontentloaded")
-            deadline = time.monotonic() + timeout_seconds
-            while time.monotonic() < deadline:
-                _raise_if_cancelled(cancel_check)
-                _emit(progress, "waiting", "等待网站授权，请在浏览器中完成登录")
-                cookies = context.cookies()
-                cookie_header = format_cookie_header(cookies)
-                if _has_login_cookie(cookie_header):
-                    _emit(progress, "checking", "检测到登录 Cookie，验证课程主页")
-                    page.goto(_base_url_with_dynamic_params(), wait_until="domcontentloaded")
-                    if is_logged_in_home_page(page.url, page.content()):
-                        warmed_courses = warm_course_cookies(
-                            page,
-                            progress=progress,
-                            cancel_check=cancel_check,
-                            course_delay=course_delay,
-                        )
-                        _emit(progress, "cookies", "导出最终 Cookie")
-                        return format_cookie_header(context.cookies()), warmed_courses
-                page.wait_for_timeout(1000)
-            raise InitError("错误：等待登录超时，请重新运行 init")
-        except PlaywrightTimeoutError as exc:
-            raise InitError("错误：浏览器页面加载超时，请检查网络后重试") from exc
-        finally:
-            context.close()
+        _page_get(page, login_url)
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline:
+            _raise_if_cancelled(cancel_check)
+            _emit(progress, "waiting", "等待网站授权，请在浏览器中完成登录")
+            cookie_header = format_cookie_header(_page_cookies(page))
+            if _has_login_cookie(cookie_header):
+                _emit(progress, "checking", "检测到登录 Cookie，验证课程主页")
+                cookie_header, warmed_courses = warmer(
+                    cookie_header,
+                    progress=progress,
+                    cancel_check=cancel_check,
+                    course_delay=course_delay,
+                )
+                _emit(progress, "cookies", "导出最终 Cookie")
+                return cookie_header, warmed_courses
+            sleep(1.0)
+        raise InitError("错误：等待登录超时，请重新运行 init")
+    finally:
+        _close_page(page)
 
 
 def format_cookie_header(cookies: list[Mapping[str, object]]) -> str:
@@ -165,48 +161,116 @@ def is_logged_in_home_page(url: str, html: str) -> bool:
 
 
 def warm_course_cookies(
-    page,
+    cookie_header: str,
     *,
     progress: ProgressCallback | None = None,
     cancel_check: CancelCheck | None = None,
     course_delay: float = 0.0,
-) -> list[CourseRecord]:
+    client_factory: HttpClientFactory | None = None,
+    sleep: Sleep = time.sleep,
+) -> tuple[str, list[CourseRecord]]:
     _validate_delay(course_delay, name="course_delay")
     _raise_if_cancelled(cancel_check)
-    interaction_url = _extract_interaction_url(page.content())
-    _emit(progress, "courses", "进入课程列表")
-    page.goto(interaction_url, wait_until="domcontentloaded")
-    _raise_if_cancelled(cancel_check)
-    response = page.request.post(
-        "https://mooc1-1.chaoxing.com/mooc-ans/visit/courselistdata",
-        form={
-            "courseType": "1",
-            "courseFolderId": "0",
-            "baseEducation": "0",
-            "superstarClass": "",
-            "courseFolderSize": "0",
-        },
-    )
-    records = parse_course_list(response.text())
-    if not records:
-        raise InitError("错误：登录成功，但未解析到课程列表，无法预热课程入口参数")
-    _emit(progress, "courses", f"解析到 {len(records)} 门课程，开始采集课程入口参数")
-    warmed_records: list[CourseRecord] = []
-    for index, record in enumerate(records, start=1):
+    factory = client_factory or _create_chaoxing_client
+    with factory(cookie_header) as client:
+        home = client.get(_base_url_with_dynamic_params())
+        if not is_logged_in_home_page(str(home.url), home.text):
+            raise InitError("错误：Cookie 无效，请确认已登录")
+        interaction_url = _extract_interaction_url(home.text)
+        _emit(progress, "courses", "进入课程列表")
+        client.get(interaction_url)
         _raise_if_cancelled(cancel_check)
-        _emit(progress, "course", f"[{index}/{len(records)}] 进入课程：{record.title}")
-        _wait_for_course_delay(page, course_delay)
-        page.goto(record.course_url, wait_until="domcontentloaded")
-        page.wait_for_timeout(500)
-        course_study_url = page.url if _is_course_study_url(page.url) else ""
-        warmed_records.append(_with_course_study_url(record, course_study_url))
-        if _has_course_cookie(page.context.cookies(), record.course_id):
-            _emit(progress, "course_cookie", f"已采集课程入口参数：{record.title}")
-        elif course_study_url:
-            _emit(progress, "course_cookie", f"已采集课程入口参数：{record.title}")
-        else:
-            _emit(progress, "course_cookie_missing", f"未发现课程入口参数：{record.title}")
-    return warmed_records
+        response = client.post(
+            "https://mooc1-1.chaoxing.com/mooc-ans/visit/courselistdata",
+            data={
+                "courseType": "1",
+                "courseFolderId": "0",
+                "baseEducation": "0",
+                "superstarClass": "",
+                "courseFolderSize": "0",
+            },
+        )
+        records = parse_course_list(response.text)
+        if not records:
+            raise InitError("错误：登录成功，但未解析到课程列表，无法预热课程入口参数")
+        _emit(progress, "courses", f"解析到 {len(records)} 门课程，开始采集课程入口参数")
+        warmed_records: list[CourseRecord] = []
+        for index, record in enumerate(records, start=1):
+            _raise_if_cancelled(cancel_check)
+            _emit(progress, "course", f"[{index}/{len(records)}] 进入课程：{record.title}")
+            _wait_for_course_delay(course_delay, sleep)
+            entry = client.get(record.course_url)
+            course_study_url = str(entry.url) if _is_course_study_url(str(entry.url)) else ""
+            warmed_records.append(_with_course_study_url(record, course_study_url))
+            if _has_course_cookie_from_jar(client.cookies.jar, record.course_id):
+                _emit(progress, "course_cookie", f"已采集课程入口参数：{record.title}")
+            elif course_study_url:
+                _emit(progress, "course_cookie", f"已采集课程入口参数：{record.title}")
+            else:
+                _emit(progress, "course_cookie_missing", f"未发现课程入口参数：{record.title}")
+        return _merge_cookie_header(cookie_header, client.cookies.jar), warmed_records
+
+
+def _create_chaoxing_client(cookie_header: str) -> httpx.Client:
+    return httpx.Client(
+        cookies=_cookie_header_to_dict(cookie_header),
+        headers={"Referer": DEFAULT_REFERER},
+        follow_redirects=True,
+        timeout=30.0,
+    )
+
+
+def _create_drission_page(user_data_dir: str) -> object:
+    try:
+        from DrissionPage import Chromium, ChromiumOptions
+    except ImportError as exc:
+        raise InitError("错误：缺少 DrissionPage，请先安装依赖") from exc
+    options = ChromiumOptions(read_file=False).auto_port().set_user_data_path(user_data_dir)
+    browser = Chromium(addr_or_opts=options)
+    return _DrissionPageSession(browser, browser.latest_tab)
+
+
+class _DrissionPageSession:
+    def __init__(self, browser: object, page: object) -> None:
+        self._browser = browser
+        self._page = page
+
+    def get(self, url: str) -> None:
+        self._page.get(url)
+
+    def cookies(self, *, as_dict: bool = False, all_domains: bool = True) -> list[Mapping[str, object]]:
+        return self._page.cookies(as_dict=as_dict, all_domains=all_domains)
+
+    def quit(self) -> None:
+        self._browser.quit()
+
+
+def _page_get(page: object, url: str) -> None:
+    get = getattr(page, "get", None)
+    if get is None:
+        raise InitError("错误：浏览器页面对象不支持打开网址")
+    get(url)
+
+
+def _page_cookies(page: object) -> list[Mapping[str, object]]:
+    cookies = getattr(page, "cookies", None)
+    if cookies is not None:
+        try:
+            return cookies(as_dict=False, all_domains=True)
+        except TypeError:
+            return cookies(as_dict=False)
+    get_cookies = getattr(page, "get_cookies", None)
+    if get_cookies is not None:
+        return get_cookies(as_dict=False)
+    raise InitError("错误：浏览器页面对象不支持导出 Cookie")
+
+
+def _close_page(page: object) -> None:
+    for name in ("quit", "close"):
+        method = getattr(page, name, None)
+        if method is not None:
+            method()
+            return
 
 
 def _extract_interaction_url(html: str) -> str:
@@ -226,6 +290,11 @@ def _has_login_cookie(cookie_header: str) -> bool:
 
 def _has_course_cookie(cookies: list[Mapping[str, object]], course_id: str) -> bool:
     names = {str(cookie.get("name", "")).strip() for cookie in cookies}
+    return f"{course_id}enc" in names and f"{course_id}t" in names
+
+
+def _has_course_cookie_from_jar(jar, course_id: str) -> bool:
+    names = {cookie.name for cookie in jar}
     return f"{course_id}enc" in names and f"{course_id}t" in names
 
 
@@ -280,9 +349,9 @@ def _validate_delay(value: float, *, name: str) -> None:
         raise ValueError(f"{name} must be greater than or equal to 0")
 
 
-def _wait_for_course_delay(page, course_delay: float) -> None:
+def _wait_for_course_delay(course_delay: float, sleep: Sleep) -> None:
     if course_delay > 0:
-        page.wait_for_timeout(int(course_delay * 1000))
+        sleep(course_delay)
 
 
 def _base_url_with_dynamic_params() -> str:
@@ -291,3 +360,19 @@ def _base_url_with_dynamic_params() -> str:
 
 def _toml_escape(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _cookie_header_to_dict(cookie_header: str) -> dict[str, str]:
+    jar = SimpleCookie()
+    jar.load(cookie_header)
+    return {key: morsel.value for key, morsel in jar.items()}
+
+
+def _merge_cookie_header(cookie_header: str, jar) -> str:
+    values = _cookie_header_to_dict(cookie_header)
+    for cookie in jar:
+        domain = str(cookie.domain or "").lower()
+        if domain and "chaoxing.com" not in domain:
+            continue
+        values[cookie.name] = cookie.value
+    return "; ".join(f"{name}={value}" for name, value in values.items())

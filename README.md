@@ -2,7 +2,7 @@
 
 学习通课程视频下载工具，支持浏览器登录、课程/章节/视频三级浏览
 
-依赖：Python 3.11+、httpx、beautifulsoup4、playwright（Chromium）
+依赖：Python 3.11+、httpx、beautifulsoup4、DrissionPage，并需要本机已安装 Chrome 或 Edge 等 Chromium 系浏览器。
 
 Python 库使用，见 [Python API 文档](docs/api/reference.md)。
 ## 安装
@@ -98,12 +98,13 @@ python examples/download_first_video.py
 
 ## 常见问题
 
-**Playwright 未安装**
+**浏览器未启动或 DrissionPage 未安装**
 
 ```powershell
-.\.venv\Scripts\python -m pip install playwright
-.\.venv\Scripts\python -m playwright install chromium
+.\.venv\Scripts\python -m pip install DrissionPage
 ```
+
+DrissionPage 会复用本机 Chromium 系浏览器，不需要额外下载浏览器内核。
 
 **中文乱码**
 

@@ -25,7 +25,7 @@ downloader = ChaoxingDownloader.init(
 )
 ```
 
-启动有头 Chromium，等待用户手动登录超星，登录成功后自动采集登录 Cookie、课程列表和课程入口参数，并写入 `state_dir`。
+通过 DrissionPage 启动本机 Chromium 系浏览器，等待用户手动登录超星，登录成功后自动采集登录 Cookie、课程列表和课程入口参数，并写入 `state_dir`。
 
 参数：
 
@@ -416,7 +416,7 @@ path.read_bytes()
 
 ```text
 .chaoxing/
-  browser/       Playwright persistent browser context
+  browser/       DrissionPage 浏览器用户数据
   session.json   登录 Cookie、referer、base_url 等会话信息
   cache.json     课程、章节、视频和课程入口参数缓存
   downloads/     默认下载目录
